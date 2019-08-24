@@ -1,35 +1,47 @@
-const config = {
-	codeURL: 'https://restcountries.eu/rest/v2/alpha'
-};
+const state = {};
 
-$(function() {
-	$('#search-btn').on('click', () => {
-		const alpha3Code = $('#search-input').val();
-		getCountryByCode(alpha3Code)
-			.then((res) => {
-				return res;
-			})
-			.then((languages) => getAllLanguagesByIso(languages))
-			.catch((e) => console.log(e));
-	});
-});
-
-function getAllLanguagesByIso(countries) {
-	const { languages } = countries;
-	languages.filter((item) => item.iso639_1).forEach((item) => console.log(item.iso639_1));
+function init() {
+	$('#search-btn').on('click', searchAction);
 }
 
-function getCountryByCode(countryCode) {
-	return new Promise((resolve, reject) => {
-		$.ajax({
-			url: `${config.codeURL}/${countryCode}`,
-			method: 'GET',
-			success: function(country) {
-				resolve(country);
-			},
-			error: function(e) {
-				reject(e);
-			}
-		});
+function searchAction() {
+	const code = $('#search-input').val();
+	api
+		.getContryByCode(code)
+		.then((res) => {
+			const currentCountry = { ...res, languages: res.languages.map((c) => c.iso639_1) };
+			state[code] = { country: currentCountry };
+			getAllLanguagesByCode(currentCountry.languages, code);
+		})
+		.catch((e) => console.log(e));
+}
+
+function getAllLanguagesByCode(languages, code) {
+	const promises = languages.map((lang3Code) => api.getCountryByLanguage(lang3Code));
+	Promise.all(promises)
+		.then((nestedCountriesArray) => {
+			const mergedCounties = nestedCountriesArray.reduce((initArray, currentCountry) => {
+				return [ ...initArray, ...currentCountry ];
+			}, []);
+
+			const filteredCountries = mergedCounties.reduce((initObj, currentCountry) => {
+				return { ...initObj, [currentCountry.name]: currentCountry.flag };
+			}, {});
+
+			state[code].flgas = filteredCountries;
+			draw(filteredCountries);
+		})
+		.catch((e) => console.log(e));
+}
+
+function draw(flags) {
+	Object.entries(flags).map(([ key, value ]) => {
+		const clonedCard = $('#cardCountry').clone();
+		clonedCard.find('img').attr({ src: value });
+		clonedCard.css({ display: 'inline-block' });
+		clonedCard.find('#title').html(key);
+		$('#main').append(clonedCard);
 	});
 }
+
+init();
